@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/hughescoin/basenames-cli/base"
 	"github.com/spf13/cobra"
 )
@@ -74,12 +76,61 @@ var blockCmd = &cobra.Command{
 	},
 }
 
+var ownerCmd = &cobra.Command{
+	Use:   "ownerOf",
+	Short: "Check the owner of a basename",
+	Run: func(cmd *cobra.Command, args []string) {
+		if tokenId == "" {
+			fmt.Println("Error: tokenId is required for checking owner")
+			return
+		}
+
+		// Convert tokenId string to big.Int
+		tokenIdBig, success := new(big.Int).SetString(tokenId, 10)
+		if !success {
+			fmt.Println("Error: Invalid tokenId format")
+			return
+		}
+
+		contract, err := base.BaseClient.NewBasenamesContract()
+		if err != nil {
+			fmt.Printf("Error creating contract instance: %v\n", err)
+			return
+		}
+
+		// Encode function call
+		data, err := contract.ABI.Pack("ownerOf", tokenIdBig)
+		if err != nil {
+			fmt.Printf("Error encoding function call: %v\n", err)
+			return
+		}
+
+		// Call the contract
+		result, err := base.BaseClient.ReadContract(contract.Address, data)
+		if err != nil {
+			fmt.Printf("Error calling contract: %v\n", err)
+			return
+		}
+
+		// Decode the result
+		var owner common.Address
+		err = contract.ABI.UnpackIntoInterface(&owner, "ownerOf", result)
+		if err != nil {
+			fmt.Printf("Error decoding result: %v\n", err)
+			return
+		}
+
+		fmt.Printf("Owner of token %s: %s\n", tokenId, owner.Hex())
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(checkCmd)
 	checkCmd.AddCommand(availabilityCmd)
 	checkCmd.AddCommand(expirationCmd)
 	checkCmd.AddCommand(balanceCmd)
 	checkCmd.AddCommand(blockCmd)
+	checkCmd.AddCommand(ownerCmd)
 
 	// Add tokenId flag to the check command, making it available to all subcommands
 	checkCmd.PersistentFlags().StringVar(&tokenId, "tokenId", "", "Token ID to check")
@@ -88,6 +139,6 @@ func init() {
 	availabilityCmd.MarkFlagRequired("tokenId")
 	expirationCmd.MarkFlagRequired("tokenId")
 
-	// Do not require tokenId flag for balance subcommand
-	//balanceCmd.Flags().String("tokenId", "", "Token ID (not used for balance check)")
+	ownerCmd.Flags().StringVar(&tokenId, "tokenId", "", "Token ID to check owner")
+	ownerCmd.MarkFlagRequired("tokenId")
 }
