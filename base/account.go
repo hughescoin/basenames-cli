@@ -87,9 +87,16 @@ func (c *Client) GetBlock() (string, error) {
 		return "", err
 	}
 
-	// Print the response
-	fmt.Println(string(body))
-	return string(body), nil
+	if err := json.Unmarshal(body, &GetBlockResponse); err != nil {
+		return "", fmt.Errorf("failed to parse JSON response: %v", err)
+	}
+
+	blockNumber, success := new(big.Int).SetString(GetBlockResponse.Result[2:], 16)
+	if !success {
+		return "", fmt.Errorf("failed to convert block number to big.Int")
+	}
+
+	return blockNumber.String(), nil
 
 }
 
