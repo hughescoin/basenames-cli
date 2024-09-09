@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/hughescoin/basenames-cli/base"
@@ -24,8 +25,44 @@ var availabilityCmd = &cobra.Command{
 			fmt.Println("Error: tokenId is required for checking availability")
 			return
 		}
-		// TODO: Implement availability check
-		fmt.Printf("Checking availability for token ID: %s\n", tokenId)
+		tokenIdBig, success := new(big.Int).SetString(tokenId, 10)
+		if !success {
+			fmt.Println("Error: Invalid tokenId format")
+			return
+		}
+		//initiatilize contract
+		contract, err := base.BaseClient.NewBasenamesContract()
+		if err != nil {
+			fmt.Printf("Error creating contract instance: %v\n", err)
+			return
+
+		}
+
+		data, err := contract.ABI.Pack("isAvailable", tokenIdBig)
+		if err != nil {
+			fmt.Printf("Error encoding function call: %v\n", err)
+			return
+		}
+
+		result, err := base.BaseClient.ReadContract(contract.Address, data)
+		if err != nil {
+			fmt.Printf("Error calling contract: %v\n", err)
+			return
+		}
+
+		var availability bool
+		err = contract.ABI.UnpackIntoInterface(&availability, "isAvailable", result)
+		if err != nil {
+			fmt.Printf("Error decoding result: %v\n", err)
+			return
+		}
+
+		if availability == true {
+			fmt.Printf("%s is available \n", tokenId)
+		} else {
+			fmt.Printf("%s is not available \n", tokenId)
+		}
+
 	},
 }
 
@@ -37,8 +74,42 @@ var expirationCmd = &cobra.Command{
 			fmt.Println("Error: tokenId is required for checking expiration")
 			return
 		}
-		// TODO: Implement expiration check
 		fmt.Printf("Checking expiration for token ID: %s\n", tokenId)
+
+		tokenIdBig, success := new(big.Int).SetString(tokenId, 10)
+		if !success {
+			fmt.Println("Error: Invalid tokenId format")
+			return
+		}
+
+		contract, err := base.BaseClient.NewBasenamesContract()
+		if err != nil {
+
+		}
+
+		data, err := contract.ABI.Pack("nameExpires", tokenIdBig)
+		if err != nil {
+			fmt.Printf("Error encoding function call: %v\n", err)
+			return
+		}
+
+		result, err := base.BaseClient.ReadContract(contract.Address, data)
+		if err != nil {
+			fmt.Printf("Error calling contract: %v\n", err)
+			return
+		}
+
+		var epochTime big.Int
+		unpackResult, err := contract.ABI.Unpack("nameExpires", result)
+		if err != nil {
+			fmt.Printf("Error decoding result: %v\n", err)
+			return
+		}
+
+		epochTime = *unpackResult[0].(*big.Int)
+		expirationTime := time.Unix(epochTime.Int64(), 0)
+		fmt.Printf("Expiration time for token ID %s: %s\n", tokenId, expirationTime.Format(time.RFC3339))
+		// TODO: Implement expiration check
 	},
 }
 
@@ -55,7 +126,14 @@ var balanceCmd = &cobra.Command{
 			fmt.Printf("Error checking block number: %v\n", err)
 			return
 		}
-		fmt.Printf("%s Account balance: %s\n", base.BaseClient.Address, accountBalance)
+
+		accountBalanceBigInt, success := new(big.Int).SetString(accountBalance, 10)
+		if !success {
+			fmt.Println("Error: Invalid account balance format")
+			return
+		}
+		accountBalance = base.WeiToEth(accountBalanceBigInt)
+		fmt.Printf("%s Account balance: %s ETH\n", base.BaseClient.Address, accountBalance)
 	},
 }
 
